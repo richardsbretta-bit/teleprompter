@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Teleprompter v2</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #111; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; height: 100vh; }
+
+  /* ===== INPUT SCREEN ===== */
+  #input-screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100vh; padding: 40px 20px; gap: 24px;
+    animation: fadeIn 0.4s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+  #input-screen h1 {
+    font-size: 32px; font-weight: 700; letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  #input-screen p.subtitle {
+    color: #888; font-size: 14px; margin-top: -12px;
+  }
+
+  #text-input {
+    width: 100%; max-width: 720px; height: 320px;
+    background: #1a1a1a; color: #e0e0e0; border: 1px solid #333;
+    border-radius: 12px; padding: 20px; font-size: 16px;
+    font-family: Georgia, serif; line-height: 1.7; resize: vertical;
+    outline: none; transition: border-color 0.2s;
+  }
+  #text-input:focus { border-color: #60a5fa; }
+  #text-input::placeholder { color: #555; }
+
+  /* Drop zone */
+  #drop-zone {
+    width: 100%; max-width: 720px; padding: 32px 20px;
+    border: 2px dashed #333; border-radius: 12px;
+    text-align: center; cursor: pointer;
+    transition: all 0.25s ease; position: relative;
+  }
+  #drop-zone:hover { border-color: #555; background: rgba(255,255,255,0.02); }
+  #drop-zone.drag-over { border-color: #60a5fa; background: rgba(96,165,250,0.06); }
+  #drop-zone .drop-icon { font-size: 36px; margin-bottom: 8px; display: block; color: #555; }
+  #drop-zone .drop-label { font-size: 15px; color: #888; }
+  #drop-zone .drop-sublabel { font-size: 12px; color: #555; margin-top: 4px; }
+
+  .format-badges {
+    display: flex; gap: 8px; justify-content: center; margin-top: 14px; flex-wrap: wrap;
+  }
+  .format-badge {
+    font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .badge-pdf { background: rgba(239,68,68,0.15); color: #f87171; }
+  .badge-docx { background: rgba(59,130,246,0.15); color: #60a5fa; }
+  .badge-pages { background: rgba(168,85,247,0.15); color: #c084fc; }
+  .badge-txt { background: rgba(34,197,94,0.15); color: #4ade80; }
+
+  #file-status {
+    font-size: 13px; color: #888; min-height: 20px;
+    max-width: 720px; text-align: center;
+  }
+  #file-status.error { color: #f87171; }
+  #file-status.success { color: #4ade80; }
+
+  #start-btn {
+    padding: 14px 48px; border: none; border-radius: 10px; cursor: pointer;
+    font-size: 16px; font-weight: 700; letter-spacing: 0.3px;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: #fff; transition: all 0.25s; opacity: 0.4; pointer-events: none;
+  }
+  #start-btn.active { opacity: 1; pointer-events: auto; }
+  #start-btn.active:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(59,130,246,0.3); }
+
+  /* Hidden file input */
+  #file-input { display: none; }
+
+  /* ===== TELEPROMPTER SCREEN ===== */
+  #teleprompter-screen { display: none; height: 100vh; }
+  #teleprompter-screen.visible { display: block; animation: fadeIn 0.4s ease; }
+  #input-screen.hidden { display: none; }
+
+  /* Controls bar */
+  #controls {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(0,0,0,0.88); backdrop-filter: blur(12px);
+    padding: 10px 20px;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    border-bottom: 1px solid #222;
+    transition: opacity 0.3s;
+  }
+  #controls.dimmed { opacity: 0.12; }
+  #controls:hover { opacity: 1 !important; }
+
+  #controls button {
+    padding: 7px 16px; border: none; border-radius: 6px; cursor: pointer;
+    font-size: 13px; font-weight: 600; transition: all 0.2s;
+  }
+  #listenBtn { background: #22c55e; color: #fff; }
+  #listenBtn:hover { background: #16a34a; }
+  #listenBtn.listening { background: #ef4444; }
+  #listenBtn.listening:hover { background: #dc2626; }
+  #resetBtn { background: #444; color: #fff; }
+  #resetBtn:hover { background: #555; }
+  #backBtn { background: #333; color: #ccc; }
+  #backBtn:hover { background: #444; color: #fff; }
+
+  #controls label { color: #999; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  #controls input[type=range] { width: 90px; vertical-align: middle; accent-color: #60a5fa; }
+  #controls input[type=checkbox] { accent-color: #60a5fa; }
+
+  #micStatus {
+    font-size: 11px; color: #666; margin-left: auto;
+    display: flex; align-items: center; gap: 6px;
+  }
+  #micDot {
+    width: 8px; height: 8px; border-radius: 50%; background: #444;
+    display: inline-block; transition: background 0.2s;
+  }
+  #micDot.active { background: #22c55e; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* Prompter area */
+  #prompter {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    overflow: hidden; display: flex; justify-content: center;
+  }
+  #text-container {
+    max-width: 800px; width: 100%;
+    padding: 120px 40px 60vh 40px;
+    font-family: Georgia, serif;
+    transition: transform 0.15s linear;
+  }
+  #text-container p {
+    margin-bottom: 1.2em; color: #e0e0e0;
+  }
+
+  #guide {
+    position: fixed; top: 30%; left: 0; right: 0; height: 2px;
+    background: rgba(96, 165, 250, 0.25); pointer-events: none; z-index: 50;
+  }
+  #fade-top {
+    position: fixed; top: 0; left: 0; right: 0; height: 120px;
+    background: linear-gradient(to bottom, #111, transparent);
+    pointer-events: none; z-index: 10;
+  }
+  #fade-bottom {
+    position: fixed; bottom: 0; left: 0; right: 0; height: 150px;
+    background: linear-gradient(to top, #111, transparent);
+    pointer-events: none; z-index: 10;
+  }
+  #heard {
+    position: fixed; bottom: 10px; left: 20px; right: 20px;
+    font-size: 11px; color: #333;
+    z-index: 100; text-align: center; max-height: 30px; overflow: hidden;
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== INPUT SCREEN ===== -->
+<div id="input-screen">
+  <h1>Teleprompter</h1>
+  <p class="subtitle">Paste your text or drop a file to get started</p>
+
+  <textarea id="text-input" placeholder="Paste or type your speech, script, or notes here..."></textarea>
+
+  <div id="drop-zone">
+    <span class="drop-icon">&#8595;</span>
+    <div class="drop-label">Drag &amp; drop a file here, or click to browse</div>
+    <div class="drop-sublabel">Supports PDF, Word, Pages, and plain text files</div>
+    <div class="format-badges">
+      <span class="format-badge badge-pdf">PDF</span>
+      <span class="format-badge badge-docx">DOCX</span>
+      <span class="format-badge badge-pages">Pages</span>
+      <span class="format-badge badge-txt">TXT</span>
+    </div>
+  </div>
+  <input type="file" id="file-input" accept=".pdf,.docx,.pages,.txt,.text,.rtf">
+
+  <div id="file-status"></div>
+
+  <button id="start-btn">Start Teleprompter</button>
+</div>
+
+<!-- ===== TELEPROMPTER SCREEN ===== -->
+<div id="teleprompter-screen">
+  <div id="controls">
+    <button id="backBtn">&larr; Back</button>
+    <button id="listenBtn">Start Listening</button>
+    <button id="resetBtn">Reset</button>
+
+    <label>Size
+      <input type="range" id="fontSlider" min="24" max="72" value="42">
+    </label>
+
+    <label>Speed
+      <input type="range" id="speedSlider" min="80" max="400" step="10" value="150">
+      <span id="wpmLabel">150</span> WPM
+    </label>
+
+    <label>Mirror
+      <input type="checkbox" id="mirrorToggle">
+    </label>
+
+    <span id="micStatus">
+      <span id="micDot"></span>
+      <span id="micLabel">Mic off</span>
+    </span>
+  </div>
+
+  <div id="guide"></div>
+  <div id="fade-top"></div>
+  <div id="fade-bottom"></div>
+
+  <div id="prompter">
+    <div id="text-container"></div>
+  </div>
+
+  <div id="heard"></div>
+</div>
+
+<script>
+// Configure pdf.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ===========================
+// FILE PARSING
+// ===========================
+
+async function extractTextFromPDF(arrayBuffer) {
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const pages = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const strings = content.items.map(item => item.str);
+    pages.push(strings.join(' '));
+  }
+  return pages.join('\n\n');
+}
+
+async function extractTextFromDocx(arrayBuffer) {
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  const docXml = zip.file('word/document.xml');
+  if (!docXml) throw new Error('Invalid DOCX: word/document.xml not found');
+  const xmlText = await docXml.async('text');
+
+  // Parse XML and extract text from <w:t> tags
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, 'application/xml');
+  const nsResolver = (prefix) => {
+    const ns = { 'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main' };
+    return ns[prefix] || null;
+  };
+
+  // Get all paragraphs
+  const paragraphs = doc.getElementsByTagNameNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'p');
+  const result = [];
+  for (const para of paragraphs) {
+    const texts = para.getElementsByTagNameNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 't');
+    let line = '';
+    for (const t of texts) {
+      line += t.textContent || '';
+    }
+    if (line.trim()) result.push(line.trim());
+  }
+  return result.join('\n\n');
+}
+
+async function extractTextFromPages(arrayBuffer) {
+  const zip = await JSZip.loadAsync(arrayBuffer);
+
+  // Try multiple known locations for text in .pages files
+  // Method 1: Look for preview text (most reliable for text extraction)
+  const previewFile = zip.file('preview.pdf');
+  if (previewFile) {
+    try {
+      const pdfData = await previewFile.async('arraybuffer');
+      return await extractTextFromPDF(pdfData);
+    } catch (e) { /* fall through */ }
+  }
+
+  // Method 2: Look for index.xml (older Pages format)
+  const indexXml = zip.file('index.xml');
+  if (indexXml) {
+    const xml = await indexXml.async('text');
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xml, 'application/xml');
+    // Extract all text nodes
+    const walker = document.createTreeWalker(doc, NodeFilter.SHOW_TEXT);
+    const texts = [];
+    while (walker.nextNode()) {
+      const val = walker.currentNode.nodeValue.trim();
+      if (val) texts.push(val);
+    }
+    if (texts.length) return texts.join(' ');
+  }
+
+  // Method 3: Try to find any readable text in the archive
+  const textParts = [];
+  for (const [path, file] of Object.entries(zip.files)) {
+    if (path.endsWith('.txt') || path.endsWith('.xml') || path.endsWith('.html')) {
+      try {
+        const content = await file.async('text');
+        const stripped = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (stripped.length > 20) textParts.push(stripped);
+      } catch (e) { /* skip binary files */ }
+    }
+  }
+  if (textParts.length) return textParts.join('\n\n');
+
+  throw new Error('Could not extract text from this Pages file. Try exporting as PDF or plain text first.');
+}
+
+async function handleFile(file) {
+  const status = document.getElementById('file-status');
+  const textarea = document.getElementById('text-input');
+  status.className = '';
+  status.textContent = 'Processing ' + file.name + '...';
+
+  try {
+    let text = '';
+    const ext = file.name.split('.').pop().toLowerCase();
+
+    if (ext === 'pdf') {
+      const buf = await file.arrayBuffer();
+      text = await extractTextFromPDF(buf);
+    } else if (ext === 'docx') {
+      const buf = await file.arrayBuffer();
+      text = await extractTextFromDocx(buf);
+    } else if (ext === 'pages') {
+      const buf = await file.arrayBuffer();
+      text = await extractTextFromPages(buf);
+    } else if (['txt', 'text', 'rtf', 'md'].includes(ext)) {
+      text = await file.text();
+    } else {
+      throw new Error('Unsupported file format: .' + ext);
+    }
+
+    text = text.trim();
+    if (!text) throw new Error('No text content found in ' + file.name);
+
+    textarea.value = text;
+    textarea.dispatchEvent(new Event('input'));
+    status.className = 'success';
+    status.textContent = 'Loaded ' + file.name + ' (' + text.split(/\s+/).length + ' words)';
+  } catch (err) {
+    status.className = 'error';
+    status.textContent = 'Error: ' + err.message;
+    console.error(err);
+  }
+}
+
+// ===========================
+// INPUT SCREEN SETUP
+// ===========================
+
+const textInput = document.getElementById('text-input');
+const startBtn = document.getElementById('start-btn');
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+textInput.addEventListener('input', () => {
+  const hasText = textInput.value.trim().length > 0;
+  startBtn.classList.toggle('active', hasText);
+});
+
+// Drop zone events
+dropZone.addEventListener('click', () => fileInput.click());
+
+dropZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropZone.classList.add('drag-over');
+});
+dropZone.addEventListener('dragleave', () => {
+  dropZone.classList.remove('drag-over');
+});
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) handleFile(fileInput.files[0]);
+});
+
+startBtn.addEventListener('click', () => {
+  if (!textInput.value.trim()) return;
+  showTeleprompter(textInput.value.trim());
+});
+
+// ===========================
+// TELEPROMPTER ENGINE
+// ===========================
+
+let isListening = false;
+let recognition = null;
+let scrollOffset = 0;
+let fontSize = 42;
+let isPaused = false;
+let lastSpeechTime = 0;
+let speechScrollInterval = null;
+let totalWordCount = 0;
+let scrollWPM = 150;
+
+function showTeleprompter(text) {
+  document.getElementById('input-screen').classList.add('hidden');
+  const screen = document.getElementById('teleprompter-screen');
+  screen.classList.add('visible');
+  buildText(text);
+}
+
+function showInputScreen() {
+  // Clean up
+  if (isListening) toggleListening();
+  stopSpeechScroll();
+  scrollOffset = 0;
+
+  document.getElementById('teleprompter-screen').classList.remove('visible');
+  document.getElementById('input-screen').classList.remove('hidden');
+}
+
+function buildText(rawText) {
+  const container = document.getElementById('text-container');
+  container.innerHTML = '';
+  container.style.fontSize = fontSize + 'px';
+  container.style.lineHeight = '1.6';
+  container.style.transform = 'translateY(0)';
+  scrollOffset = 0;
+
+  // Count words for scroll speed calculation
+  totalWordCount = rawText.split(/\s+/).filter(w => w.length > 0).length;
+
+  const paragraphs = rawText.split(/\n\s*\n|\n/);
+  paragraphs.forEach((para) => {
+    const trimmed = para.trim();
+    if (!trimmed) return;
+    const p = document.createElement('p');
+    p.textContent = trimmed;
+    container.appendChild(p);
+  });
+}
+
+function getScrollHeight() {
+  const container = document.getElementById('text-container');
+  return container.scrollHeight - window.innerHeight * 0.3;
+}
+
+// ===========================
+// SPEECH RECOGNITION (VAD)
+// ===========================
+
+function initSpeech() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    alert('Speech recognition is not supported in this browser. Please use Chrome.');
+    return false;
+  }
+  recognition = new SR();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-AU';
+  recognition.maxAlternatives = 1;
+
+  recognition.onresult = (event) => {
+    lastSpeechTime = Date.now();
+    const latest = event.results[event.results.length - 1][0].transcript;
+    const isFinal = event.results[event.results.length - 1].isFinal;
+    document.getElementById('heard').textContent = (isFinal ? 'Heard: ' : '... ') + latest;
+  };
+
+  recognition.onerror = (event) => {
+    console.log('Speech error:', event.error);
+    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+      isListening = false;
+      const label = document.getElementById('micLabel');
+      if (label) label.textContent = 'Mic blocked';
+    }
+    // 'no-speech', 'aborted', 'audio-capture' all fire onend afterwards — let it restart
+  };
+
+  recognition.onend = () => {
+    if (!isListening) return;
+    const tryStart = (attempt) => {
+      if (!isListening) return;
+      try {
+        recognition.start();
+      } catch (e) {
+        if (attempt < 3) setTimeout(() => tryStart(attempt + 1), 300);
+        else console.log('Recognition restart failed after retries:', e);
+      }
+    };
+    setTimeout(() => tryStart(1), 150);
+  };
+
+  return true;
+}
+
+function startSpeechScroll() {
+  if (speechScrollInterval) return;
+  speechScrollInterval = setInterval(() => {
+    if (isPaused) return;
+    const silenceMs = Date.now() - lastSpeechTime;
+    if (silenceMs < 600) {
+      // Calculate pixels per tick from WPM and total text height
+      const totalHeight = getScrollHeight();
+      const totalMinutes = totalWordCount / scrollWPM;
+      const pxPerSecond = totalHeight / (totalMinutes * 60);
+      const pxPerTick = pxPerSecond / 20; // 20 ticks/sec
+      scrollOffset = Math.min(scrollOffset + pxPerTick, totalHeight);
+      document.getElementById('text-container').style.transform = `translateY(${-scrollOffset}px)`;
+    }
+  }, 50);
+}
+
+function stopSpeechScroll() {
+  if (speechScrollInterval) {
+    clearInterval(speechScrollInterval);
+    speechScrollInterval = null;
+  }
+}
+
+function toggleListening() {
+  const btn = document.getElementById('listenBtn');
+  const dot = document.getElementById('micDot');
+  const label = document.getElementById('micLabel');
+
+  if (!isListening) {
+    if (!recognition && !initSpeech()) return;
+    try {
+      recognition.start();
+      isListening = true;
+      lastSpeechTime = Date.now();
+      startSpeechScroll();
+      btn.textContent = 'Stop Listening';
+      btn.classList.add('listening');
+      dot.classList.add('active');
+      label.textContent = 'Listening...';
+      document.getElementById('controls').classList.add('dimmed');
+    } catch(e) {
+      console.error('Failed to start:', e);
+    }
+  } else {
+    isListening = false;
+    recognition.stop();
+    stopSpeechScroll();
+    btn.textContent = 'Start Listening';
+    btn.classList.remove('listening');
+    dot.classList.remove('active');
+    label.textContent = 'Mic off';
+    document.getElementById('controls').classList.remove('dimmed');
+  }
+}
+
+function resetPosition() {
+  scrollOffset = 0;
+  document.getElementById('text-container').style.transform = 'translateY(0)';
+}
+
+// ===========================
+// CONTROLS
+// ===========================
+
+document.getElementById('backBtn').addEventListener('click', showInputScreen);
+document.getElementById('listenBtn').addEventListener('click', toggleListening);
+document.getElementById('resetBtn').addEventListener('click', resetPosition);
+
+document.getElementById('fontSlider').addEventListener('input', function() {
+  fontSize = parseInt(this.value);
+  document.getElementById('text-container').style.fontSize = fontSize + 'px';
+  // Reapply current scroll position
+  document.getElementById('text-container').style.transform = `translateY(${-scrollOffset}px)`;
+});
+
+document.getElementById('speedSlider').addEventListener('input', function() {
+  scrollWPM = parseInt(this.value);
+  document.getElementById('wpmLabel').textContent = this.value;
+});
+
+document.getElementById('mirrorToggle').addEventListener('change', function() {
+  document.getElementById('prompter').style.transform = this.checked ? 'scaleX(-1)' : '';
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  // Don't capture keys when typing in textarea
+  if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+
+  const teleprompterVisible = document.getElementById('teleprompter-screen').classList.contains('visible');
+  if (!teleprompterVisible) return;
+
+  if (e.code === 'Space') {
+    e.preventDefault();
+    toggleListening();
+  } else if (e.code === 'ArrowUp') {
+    e.preventDefault();
+    scrollOffset = Math.max(0, scrollOffset - 100);
+    document.getElementById('text-container').style.transform = `translateY(${-scrollOffset}px)`;
+  } else if (e.code === 'ArrowDown') {
+    e.preventDefault();
+    scrollOffset += 100;
+    document.getElementById('text-container').style.transform = `translateY(${-scrollOffset}px)`;
+  } else if (e.code === 'KeyR' && !e.metaKey && !e.ctrlKey) {
+    resetPosition();
+  } else if (e.code === 'Escape') {
+    showInputScreen();
+  }
+});
+</script>
+</body>
+</html>
