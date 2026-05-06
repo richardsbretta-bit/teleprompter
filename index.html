@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Teleprompter — TLP/001</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -597,9 +599,19 @@
     grid-area: action;
   }
 
-  /* Responsive */
+  /* ===== Tablet & smaller ===== */
   @media (max-width: 860px) {
-    #input-screen { padding: 18px 20px 24px; gap: 20px; }
+    #input-screen {
+      padding: 16px 16px 24px;
+      gap: 16px;
+      grid-template-rows: auto auto auto;
+      overflow-y: auto;
+      height: auto;
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
+    html, body { overflow-y: auto; }
+
     .composition {
       grid-template-columns: 1fr;
       grid-template-areas:
@@ -609,12 +621,137 @@
         "kicker"
         "status"
         "action";
-      gap: 18px;
+      gap: 16px;
     }
-    .kicker { white-space: normal; }
-    .display-title { font-size: clamp(40px, 9vw, 64px); white-space: normal; }
-    #controls { gap: 10px; padding: 10px 14px; flex-wrap: wrap; }
-    .ctrl-group.center { gap: 14px; }
+
+    .topbar { padding-bottom: 10px; font-size: 9.5px; letter-spacing: 0.14em; }
+    .topbar-group { gap: 8px; }
+    .topbar-rule { width: 14px; }
+
+    .eyebrow { font-size: 9.5px; gap: 10px; letter-spacing: 0.18em; }
+    .eyebrow::before, .eyebrow::after { width: 18px; }
+
+    .display-title {
+      font-size: clamp(36px, 9.5vw, 64px);
+      white-space: normal;
+      letter-spacing: -0.025em;
+      line-height: 1;
+    }
+    .kicker { white-space: normal; font-size: 14.5px; line-height: 1.45; padding: 0 4px; }
+
+    .block-label { font-size: 9.5px; letter-spacing: 0.18em; }
+
+    #text-input {
+      min-height: 160px;
+      padding: 16px;
+      font-size: 16px; /* prevents iOS zoom on focus */
+      line-height: 1.55;
+    }
+    #drop-zone { min-height: 160px; }
+    .drop-content { padding: 16px; gap: 10px; }
+    .drop-icon-ring { width: 44px; height: 44px; font-size: 18px; }
+    .drop-label { font-size: 15px; }
+    .drop-sublabel { font-size: 9px; letter-spacing: 0.16em; }
+    .format-badges { gap: 4px; }
+    .format-badge { font-size: 8.5px; padding: 3px 6px; letter-spacing: 0.14em; }
+
+    .action-block {
+      flex-direction: column;
+      gap: 10px;
+      padding-top: 10px;
+    }
+    .action-hint { font-size: 9.5px; letter-spacing: 0.16em; order: 2; }
+    #start-btn {
+      order: 1;
+      width: 100%;
+      max-width: 360px;
+      padding: 16px 24px;
+      justify-content: center;
+      font-size: 12px;
+      min-height: 48px;
+    }
+
+    /* ===== Teleprompter screen ===== */
+    #controls {
+      padding: 10px 12px;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    #controls button {
+      padding: 10px 12px;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      min-height: 40px;
+      min-width: 0;
+    }
+    #controls #listenBtn { padding-left: 28px; padding-right: 12px; }
+    #listenBtn::before { left: 11px; }
+
+    .ctrl-group { gap: 6px; flex-wrap: wrap; justify-content: center; }
+    .ctrl-group.center {
+      width: 100%;
+      gap: 14px;
+      order: 2;
+      flex-wrap: wrap;
+    }
+    #controls label { font-size: 9.5px; gap: 7px; }
+    #controls input[type=range] { width: 76px; }
+    #controls input[type=checkbox] { width: 16px; height: 16px; } /* bigger tap target */
+    .ctrl-divider { display: none; }
+
+    #micStatus {
+      order: 3;
+      padding: 7px 10px;
+      font-size: 9px;
+      letter-spacing: 0.16em;
+    }
+
+    #text-container { padding: 22vh 22px 55vh; }
+
+    #guide::before { left: 6%; }
+    #guide::after { right: 6%; }
+    #fade-top { height: 18vh; }
+    #fade-bottom { height: 24vh; }
+
+    #heard { font-size: 9px; bottom: 8px; left: 14px; right: 14px; }
+  }
+
+  /* ===== Phone (≤480) ===== */
+  @media (max-width: 480px) {
+    #input-screen { padding: 12px 12px 20px; gap: 14px; }
+    .topbar { font-size: 9px; letter-spacing: 0.12em; padding-bottom: 8px; }
+    .topbar-group { gap: 6px; }
+    .topbar-group span:nth-child(3) { display: none; } /* drop redundant labels */
+
+    .display-title { font-size: clamp(32px, 11vw, 52px); }
+    .kicker { font-size: 14px; }
+
+    #text-input, #drop-zone { min-height: 130px; }
+    .drop-content { padding: 12px; }
+    .drop-icon-ring { width: 38px; height: 38px; font-size: 16px; }
+
+    #controls { padding: 8px 8px; gap: 6px; }
+    #controls button { padding: 9px 10px; font-size: 9.5px; letter-spacing: 0.1em; min-height: 38px; }
+    .ctrl-group.center { gap: 10px; }
+    #controls input[type=range] { width: 64px; }
+    #micStatus { font-size: 8.5px; padding: 6px 8px; }
+
+    #text-container { padding: 18vh 16px 50vh; }
+  }
+
+  /* iOS safe-area + viewport-units fixes */
+  @supports (padding: max(0px)) {
+    #input-screen {
+      padding-left: max(16px, env(safe-area-inset-left));
+      padding-right: max(16px, env(safe-area-inset-right));
+      padding-bottom: max(24px, env(safe-area-inset-bottom));
+    }
+    #controls {
+      padding-left: max(12px, env(safe-area-inset-left));
+      padding-right: max(12px, env(safe-area-inset-right));
+      padding-top: max(10px, env(safe-area-inset-top));
+    }
   }
 </style>
 </head>
